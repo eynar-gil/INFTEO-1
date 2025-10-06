@@ -1,0 +1,138 @@
+import sys
+import csv
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QMessageBox, QFileDialog, QComboBox
+from binarytree import Node
+
+class ArbolFacturas:
+    def __init__(self):
+        self.raiz = None
+        self.facturas_dict = {}
+
+    def insertar(self, clave, factura):
+        self.facturas_dict.setdefault(clave, []).append(factura)
+        self._reconstruir_arbol()
+
+    def _reconstruir_arbol(self):
+        claves = sorted(self.facturas_dict.keys())
+        self.raiz = self._construir_equilibrado(claves)
+
+    def _construir_equilibrado(self, claves):
+        if not claves:
+            return None
+        mid = len(claves) // 2
+        nodo = Node(claves[mid])
+        nodo.left = self._construir_equilibrado(claves[:mid])
+        nodo.right = self._construir_equilibrado(claves[mid+1:])
+        return nodo
+
+    def inorder(self):
+        return [n.value for n in self.raiz.inorder] if self.raiz else []
+
+    def preorder(self):
+        return [n.value for n in self.raiz.preorder] if self.raiz else []
+
+    def postorder(self):
+     
+        return [n.value for n in self.raiz.postorder] if self.raiz else []
+
+class VentanaAuditor(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Auditor de Facturas (binarytree)")
+        self.resize(900, 450)
+
+        self.arbol = ArbolFacturas()
+        self.ruta_csv = None
+        self.clave_seleccionada = 'cliente'
+
+        self.combo_clave = QComboBox()
+        self.combo_clave.addItems(["cliente", "monto"])
+        self.combo_clave.currentTextChanged.connect(self.actualizar_clave)
+
+        self.boton_cargar = QtWidgets.QPushButton("Cargar facturas.csv")
+        self.boton_cargar.clicked.connect(self.cargar_datos)
+
+        self.lista_inorder = QtWidgets.QListWidget()
+        self.lista_preorder = QtWidgets.QListWidget()
+        self.lista_postorder = QtWidgets.QListWidget()
+
+        layout_superior = QtWidgets.QHBoxLayout()
+        layout_superior.addWidget(QtWidgets.QLabel("Clave del árbol:"))
+        layout_superior.addWidget(self.combo_clave)
+        layout_superior.addWidget(self.boton_cargar)
+
+        layout_listas = QtWidgets.QHBoxLayout()
+        layout_listas.addWidget(self._crear_grupo("Recorrido Inorder", self.lista_inorder))
+        layout_listas.addWidget(self._crear_grupo("Recorrido Preorder", self.lista_preorder))
+        layout_listas.addWidget(self._crear_grupo("Recorrido Postorder", self.lista_postorder))
+
+        layout_principal = QtWidgets.QVBoxLayout()
+        layout_principal.addLayout(layout_superior)
+        layout_principal.addLayout(layout_listas)
+        self.setLayout(layout_principal)
+
+    def actualizar_clave(self, texto):
+        self.clave_seleccionada = texto
+
+    def _crear_grupo(self, titulo, lista):
+        grupo = QtWidgets.QGroupBox(titulo)
+        vbox = QtWidgets.QVBoxLayout()
+        vbox.addWidget(lista)
+        grupo.setLayout(vbox)
+        return grupo
+
+    def cargar_datos(self):
+        ruta, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo CSV", "", "Archivos CSV (*.csv)")
+        if not ruta:
+            return
+
+        self.ruta_csv = ruta
+        try:
+            with open(ruta, newline='', encoding='utf-8') as archivo:
+                lector = csv.reader(archivo)
+                encabezado = next(lector)
+                if encabezado != ['id', 'cliente', 'monto']:
+                    QMessageBox.critical(self, "Error", "Encabezado del CSV inválido. Debe ser: id,cliente,monto")
+                    return
+
+                self.arbol = ArbolFacturas()
+                for fila in lector:
+                    if len(fila) != 3:
+                        continue
+                    id_factura, cliente, monto = fila
+                    try:
+                        monto = float(monto)
+                        clave = cliente if self.clave_seleccionada == 'cliente' else monto
+                        self.arbol.insertar(clave, (id_factura, cliente, monto))
+                    except ValueError:
+                        continue
+
+            self.mostrar_recorridos()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al leer el archivo: {e}")
+
+    def mostrar_recorridos(self):
+        self.lista_inorder.clear()
+        self.lista_preorder.clear()
+        self.lista_postorder.clear()
+
+        inorder = self.arbol.inorder()
+        preorder = self.arbol.preorder()
+        postorder = self.arbol.postorder()
+
+        list(map(lambda clave: [self.lista_inorder.addItem(f"{f[0]} - {f[1]} - ${f[2]:.2f}") 
+             for f in self.arbol.facturas_dict[clave]], inorder))
+
+        list(map(lambda clave: [self.lista_preorder.addItem(f"{f[0]} - {f[1]} - ${f[2]:.2f}") 
+             for f in self.arbol.facturas_dict[clave]], preorder))
+
+        list(map(lambda clave: self.lista_postorder.addItem(
+            f"{clave}: Subtotal ${sum(float(f[2]) for f in self.arbol.facturas_dict[clave]):.2f}"
+        ), postorder))
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    ventana = VentanaAuditor()
+    ventana.show()
+    sys.exit(app.exec_())
