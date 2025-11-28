@@ -1,0 +1,76 @@
+import sys
+import re
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QLabel,
+    QLineEdit, QPushButton, QGridLayout, QMessageBox
+)
+
+
+class Formulario(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Formulario de Registro")
+        self.setFixedSize(480, 520)
+
+        layout = QGridLayout()
+
+        self.nombre = self._add_field(layout, "Nombre", 0, placeholder="Ej: Carlos")
+        self.apellido = self._add_field(layout, "Apellido", 1, placeholder="Ej: González")
+        self.cedula = self._add_field(layout, "Cédula:[8-123-456]", 2, placeholder="Cédula:[8-123-456]")
+    
+
+     
+        self.enviar = QPushButton("Registrar")
+        self.enviar.clicked.connect(self.process_form)
+        layout.addWidget(self.enviar, 10, 0, 1, 2)
+
+        self.setLayout(layout)
+
+    def _add_field(self, layout, label_text, row, placeholder="", echo=False):
+        label = QLabel(label_text)
+        field = QLineEdit()
+        field.setPlaceholderText(placeholder)
+        if echo:
+            field.setEchoMode(QLineEdit.Password)
+        layout.addWidget(label, row, 0)
+        layout.addWidget(field, row, 1)
+        return field
+
+
+    def validar_nombre(self, valor):
+        return bool(re.fullmatch(r"[A-Za-zÁÉÍÓÚáéíóúñÑ ]{2,40}", valor))
+
+    def validar_apellido(self, valor):
+        return bool(re.fullmatch(r"[A-Za-zÁÉÍÓÚáéíóúñÑ ]{2,40}", valor))
+
+    def validar_cedula(self, valor):
+        # Formato panameño: provincia (1-9) - bloque1 (1-4 dígitos) - bloque2 (1-5 dígitos)
+        return bool(re.fullmatch(r"[1-9]-\d{1,4}-\d{1,5}", valor))
+
+   
+
+
+    def process_form(self):
+        errores = []
+
+        if not self.validar_nombre(self.nombre.text().strip()):
+            errores.append("Nombre no válido.")
+        if not self.validar_apellido(self.apellido.text().strip()):
+            errores.append("Apellido no válido.")
+        if not self.validar_cedula(self.cedula.text().strip()):
+            errores.append("Cédula no válida. Use el formato: X-XXXX-XXXXX (ej: 8-123-456).")
+       
+        if errores:
+            QMessageBox.critical(self, "Errores en el formulario",
+                                 "\n".join(errores))
+        else:
+            QMessageBox.information(self, "Éxito", "Formulario enviado exitosamente.")
+
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    ventana = Formulario()
+    ventana.show()
+    sys.exit(app.exec_())
